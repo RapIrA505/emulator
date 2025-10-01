@@ -6,6 +6,9 @@ from tkinter import scrolledtext
 vfs_name = os.getlogin()
 exit_cmd = "exit"
 
+def do_parc(args, output_func):
+    if os.getenv(args) is not None:
+        output_func(os.getenv(args))
 
 def do_ls(args, output_func):
     """Реализация команды ls с поддержкой путей"""
@@ -50,7 +53,6 @@ def execute_command(command, output_widget):
     output_widget.insert(tk.END, f"{vfs_name} {command}\n")
 
     parts = shlex.split(command)
-
     if not parts:
         output_widget.config(state=tk.DISABLED)
         output_widget.see(tk.END)
@@ -73,6 +75,8 @@ def execute_command(command, output_widget):
         do_cd(args, output_func)
     elif cmd == 'pwd':
         do_pwd(args, output_func)
+    elif cmd[0] == '$':
+        do_parc(cmd[1:], output_func)
     else:
         output_func(f'{cmd}: command not found')
 
