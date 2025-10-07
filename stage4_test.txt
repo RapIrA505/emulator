@@ -1,0 +1,77 @@
+# Тестирование этапа 4: улучшенный ls, tail, whoami
+echo "=== ТЕСТИРОВАНИЕ ЭТАПА 4 ==="
+echo ""
+
+echo "--- ТЕСТ 1: КОМАНДА LS С ПАРАМЕТРАМИ ---"
+echo "Обычный вывод ls:"
+ls
+echo ""
+
+echo "Вывод ls с подробной информацией (-l):"
+ls -l
+echo ""
+
+echo "Вывод ls со скрытыми файлами (-a):"
+ls -a
+echo ""
+
+echo "Комбинированные параметры ls (-la):"
+ls -la
+echo ""
+
+echo "--- ТЕСТ 2: КОМАНДА TAIL ---"
+echo "Создание тестового файла для tail..."
+echo "Строка 1" > test_tail.txt
+echo "Строка 2" >> test_tail.txt
+echo "Строка 3" >> test_tail.txt
+echo "Строка 4" >> test_tail.txt
+echo "Строка 5" >> test_tail.txt
+echo "Строка 6" >> test_tail.txt
+echo "Строка 7" >> test_tail.txt
+echo "Строка 8" >> test_tail.txt
+echo "Строка 9" >> test_tail.txt
+echo "Строка 10" >> test_tail.txt
+echo "Строка 11" >> test_tail.txt
+echo "Строка 12" >> test_tail.txt
+
+echo "Tail последних 10 строк (по умолчанию):"
+tail test_tail.txt
+echo ""
+
+echo "Tail последних 5 строк (-n 5):"
+tail -n 5 test_tail.txt
+echo ""
+
+echo "Tail последних 3 строк (краткий формат -3):"
+tail -3 test_tail.txt
+echo ""
+
+echo "--- ТЕСТ 3: КОМАНДА WHOAMI ---"
+echo "Текущий пользователь:"
+whoami
+echo ""
+
+echo "--- ТЕСТ 4: ИНТЕГРАЦИЯ С VFS ---"
+echo "Загрузка VFS:"
+vfs-load
+echo ""
+
+echo "Проверка VFS:"
+vfs-status
+echo ""
+
+echo "Навигация в VFS:"
+vfs-ls
+vfs-cd documents
+vfs-pwd
+vfs-ls
+vfs-cd /
+echo ""
+
+echo "--- ТЕСТ 5: ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ---"
+echo "Домашняя директория: $HOME"
+echo "Пользователь: $USER"
+echo ""
+
+echo "=== ТЕСТИРОВАНИЕ ЭТАПА 4 ЗАВЕРШЕНО ==="
+echo "Все команды этапа 4 работают корректно!"

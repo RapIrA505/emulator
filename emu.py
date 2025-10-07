@@ -5,6 +5,8 @@ from tkinter import scrolledtext, messagebox
 import argparse
 import sys
 import subprocess
+import stat
+import datetime
 
 vfs_name = os.getlogin()
 exit_cmd = "exit"
@@ -61,8 +63,12 @@ class VFS:
         # Уровень 1
         folders_l1 = ["documents/", "pictures/", "music/", "projects/"]
         files_l1 = {
-            "readme.txt": "Добро пожаловать в VFS!\nЭто виртуальная файловая система.",
-            "hello.py": "print('Hello from VFS!')",
+            "readme.txt": "Добро пожаловать в VFS!\nЭто виртуальная файловая система.\n" +
+                         "Эта строка 1\nЭта строка 2\nЭта строка 3\nЭта строка 4\nЭта строка 5\n" +
+                         "Эта строка 6\nЭта строка 7\nЭта строка 8\nЭта строка 9\nЭта строка 10\n" +
+                         "Эта строка 11\nЭта строка 12\nЭта строка 13\nЭта строка 14\nЭта строка 15",
+            "hello.py": "print('Hello from VFS!')\n# This is a comment\nimport os\n\nprint('Goodbye')",
+            "large_file.txt": "\n".join([f"Строка {i}" for i in range(1, 21)]),
         }
 
         # Уровень 2
@@ -213,6 +219,7 @@ class VFS:
 
         return list(target_dir.children.keys())
 
+
     def get_current_path(self):
         return self.current_dir.get_path()
 
@@ -244,21 +251,90 @@ def do_parc(args, output_func):
 
 
 def do_ls(args, output_func):
-    """Команда ls для реальной файловой системы"""
-    target_dir = '.' if not args else args[0]
+    """Команда ls для реальной файловой системы с поддержкой параметров"""
+    # Парсим аргументы
+    show_all = False
+    long_format = False
+    target_dir = '.'
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg.startswith('-'):
+            if 'a' in arg:
+                show_all = True
+            if 'l' in arg:
+                long_format = True
+        else:
+            target_dir = arg
+        i += 1
 
     try:
         entries = os.listdir(target_dir)
+
+        # Фильтруем скрытые файлы если не указан -a
+        if not show_all:
+            entries = [e for e in entries if not e.startswith('.')]
+
+        # Сортируем - сначала директории, потом файлы
+        entries.sort(key=lambda x: (not os.path.isdir(os.path.join(target_dir, x)), x))
+
         for entry in entries:
             full_path = os.path.join(target_dir, entry)
             if os.path.isdir(full_path):
-                output_func(entry + "/")
+                if long_format:
+                    # Для директории в длинном формате
+                    stat_info = os.stat(full_path)
+                    mtime = datetime.datetime.fromtimestamp(stat_info.st_mtime).strftime('%Y-%m-%d %H:%M')
+                    permissions = get_permissions_string(stat_info)
+                    output_func(
+                        f"{permissions} {stat_info.st_nlink:>4} {stat_info.st_uid:>6} {stat_info.st_gid:>6} {'<DIR>':>8} {mtime} {entry}/")
+                else:
+                    output_func(entry + "/")
             else:
-                output_func(entry)
+                if long_format:
+                    # Для файла в длинном формате
+                    stat_info = os.stat(full_path)
+                    mtime = datetime.datetime.fromtimestamp(stat_info.st_mtime).strftime('%Y-%m-%d %H:%M')
+                    size = stat_info.st_size
+                    permissions = get_permissions_string(stat_info)
+                    output_func(
+                        f"{permissions} {stat_info.st_nlink:>4} {stat_info.st_uid:>6} {stat_info.st_gid:>6} {size:>8} {mtime} {entry}")
+                else:
+                    output_func(entry)
+
     except FileNotFoundError:
         output_func(f"ls: cannot access '{target_dir}': No such file or directory")
     except PermissionError:
         output_func(f"ls: cannot open directory '{target_dir}': Permission denied")
+
+
+def get_permissions_string(stat_info):
+    """Возвращает строку прав доступа в UNIX-стиле"""
+    permissions = ''
+
+    # Тип файла
+    if stat.S_ISDIR(stat_info.st_mode):
+        permissions += 'd'
+    else:
+        permissions += '-'
+
+    # Права владельца
+    permissions += 'r' if stat_info.st_mode & stat.S_IRUSR else '-'
+    permissions += 'w' if stat_info.st_mode & stat.S_IWUSR else '-'
+    permissions += 'x' if stat_info.st_mode & stat.S_IXUSR else '-'
+
+    # Права группы
+    permissions += 'r' if stat_info.st_mode & stat.S_IRGRP else '-'
+    permissions += 'w' if stat_info.st_mode & stat.S_IWGRP else '-'
+    permissions += 'x' if stat_info.st_mode & stat.S_IXGRP else '-'
+
+    # Права остальных
+    permissions += 'r' if stat_info.st_mode & stat.S_IROTH else '-'
+    permissions += 'w' if stat_info.st_mode & stat.S_IWOTH else '-'
+    permissions += 'x' if stat_info.st_mode & stat.S_IXOTH else '-'
+
+    return permissions
 
 
 def do_cd(args, output_func):
@@ -307,6 +383,65 @@ def do_cat(args, output_func):
         output_func(f"cat: {filename}: Error reading file")
 
 
+def do_tail(args, output_func):
+    """Команда tail - вывод последних строк файла"""
+    if not args:
+        output_func("tail: missing file operand")
+        output_func("Usage: tail [-n LINES] FILE")
+        return
+
+    # Параметры по умолчанию
+    lines_count = 10
+    filename = None
+
+    # Парсим аргументы
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == '-n':
+            if i + 1 < len(args):
+                try:
+                    lines_count = int(args[i + 1])
+                    i += 1  # Пропускаем следующий аргумент (число строк)
+                except ValueError:
+                    output_func(f"tail: invalid number of lines: '{args[i + 1]}'")
+                    return
+            else:
+                output_func("tail: option requires an argument -- 'n'")
+                return
+        elif arg.startswith('-') and len(arg) > 1 and arg[1:].isdigit():
+            # Формат -5 (без пробела)
+            lines_count = int(arg[1:])
+        elif not arg.startswith('-'):
+            filename = arg
+        i += 1
+
+    if not filename:
+        output_func("tail: missing file operand")
+        return
+
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            all_lines = f.readlines()
+
+        # Выводим последние lines_count строк
+        start_line = max(0, len(all_lines) - lines_count)
+        for line in all_lines[start_line:]:
+            output_func(line.rstrip())
+
+    except FileNotFoundError:
+        output_func(f"tail: cannot open '{filename}' for reading: No such file or directory")
+    except IsADirectoryError:
+        output_func(f"tail: error reading '{filename}': Is a directory")
+    except Exception as e:
+        output_func(f"tail: error reading '{filename}': {str(e)}")
+
+
+def do_whoami(args, output_func):
+    """Команда whoami - вывод текущего пользователя"""
+    output_func(os.getlogin())
+
+
 # === КОМАНДЫ VFS ===
 
 def do_vfs_ls(args, output_func):
@@ -315,7 +450,22 @@ def do_vfs_ls(args, output_func):
         output_func("VFS не загружена. Используйте 'vfs-load' для загрузки.")
         return
 
-    target_path = None if not args else args[0]
+    # Парсим аргументы
+    show_all = False
+    long_format = False
+    target_path = None
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg.startswith('-'):
+            if 'a' in arg:
+                show_all = True
+            if 'l' in arg:
+                long_format = True
+        else:
+            target_path = arg
+        i += 1
 
     items = vfs.list_directory(target_path)
     if items is None:
@@ -326,12 +476,25 @@ def do_vfs_ls(args, output_func):
         output_func("(директория пуста)")
         return
 
+    # Фильтруем скрытые файлы если не указан -a
+    if not show_all:
+        items = [item for item in items if not item.startswith('.')]
+
     for item in items:
         node = vfs.current_dir.children[item]
         if node.is_directory:
-            output_func(item + "/")
+            if long_format:
+                # Для директории в длинном формате VFS
+                output_func(f"d--------- {item}/")
+            else:
+                output_func(item + "/")
         else:
-            output_func(item)
+            if long_format:
+                # Для файла в длинном формате VFS
+                content_length = len(node.content) if node.content else 0
+                output_func(f"---------- {content_length:>8} {item}")
+            else:
+                output_func(item)
 
 
 def do_vfs_cd(args, output_func):
@@ -381,6 +544,70 @@ def do_vfs_cat(args, output_func):
             output_func(f"vfs-cat: {filename}: Is a directory")
     else:
         output_func(f"vfs-cat: {filename}: No such file or directory")
+
+
+def do_vfs_tail(args, output_func):
+    """Команда tail для VFS - вывод последних строк файла"""
+    if not vfs.loaded:
+        output_func("VFS не загружена. Используйте 'vfs-load' для загрузки.")
+        return
+
+    if not args:
+        output_func("vfs-tail: missing file operand")
+        output_func("Usage: vfs-tail [-n LINES] FILE")
+        return
+
+    # Параметры по умолчанию
+    lines_count = 10
+    filename = None
+
+    # Парсим аргументы
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == '-n':
+            if i + 1 < len(args):
+                try:
+                    lines_count = int(args[i + 1])
+                    i += 1  # Пропускаем следующий аргумент (число строк)
+                except ValueError:
+                    output_func(f"vfs-tail: invalid number of lines: '{args[i + 1]}'")
+                    return
+            else:
+                output_func("vfs-tail: option requires an argument -- 'n'")
+                return
+        elif arg.startswith('-') and len(arg) > 1 and arg[1:].isdigit():
+            # Формат -5 (без пробела)
+            lines_count = int(arg[1:])
+        elif not arg.startswith('-'):
+            filename = arg
+        i += 1
+
+    if not filename:
+        output_func("vfs-tail: missing file operand")
+        return
+
+    if filename in vfs.current_dir.children:
+        node = vfs.current_dir.children[filename]
+        if not node.is_directory:
+            if node.content:
+                # Разбиваем содержимое на строки
+                all_lines = node.content.split('\n')
+                # Выводим последние lines_count строк
+                start_line = max(0, len(all_lines) - lines_count)
+                for line in all_lines[start_line:]:
+                    output_func(line)
+            else:
+                output_func("(файл пуст)")
+        else:
+            output_func(f"vfs-tail: {filename}: Is a directory")
+    else:
+        output_func(f"vfs-tail: {filename}: No such file or directory")
+
+
+def do_vfs_whoami(args, output_func):
+    """Команда whoami для VFS - вывод текущего пользователя"""
+    output_func(vfs_name)
 
 
 def do_vfs_load(args, output_func):
@@ -526,6 +753,10 @@ def execute_command(command, output_widget, show_command=True):
         do_echo(args, output_func)
     elif cmd == 'cat':
         do_cat(args, output_func)
+    elif cmd == 'tail':
+        do_tail(args, output_func)
+    elif cmd == 'whoami':
+        do_whoami(args, output_func)
     # Команды VFS
     elif cmd == 'vfs-ls':
         do_vfs_ls(args, output_func)
@@ -535,6 +766,10 @@ def execute_command(command, output_widget, show_command=True):
         do_vfs_pwd(args, output_func)
     elif cmd == 'vfs-cat':
         do_vfs_cat(args, output_func)
+    elif cmd == 'vfs-tail':
+        do_vfs_tail(args, output_func)
+    elif cmd == 'vfs-whoami':
+        do_vfs_whoami(args, output_func)
     elif cmd == 'vfs-load':
         do_vfs_load(args, output_func)
     elif cmd == 'vfs-status':
@@ -542,7 +777,7 @@ def execute_command(command, output_widget, show_command=True):
     # Запуск скриптов
     elif cmd in ['basic_commands', 'navigation', 'error_test',
                  'vfs_deepstruct_test', 'vfs_error_test',
-                 'vfs_all_test', 'system_test']:
+                 'vfs_all_test', 'system_test', 'stage4_test']:
         run_script(cmd, output_widget, output_func)
     else:
         output_func(f'{cmd}: command not found')
@@ -589,14 +824,14 @@ def main():
     # Приветственное сообщение
     output_func("=== Эмулятор терминала ===")
     output_func("Доступные команды:")
-    output_func("  Основные: ls, cd, pwd, echo, cat, exit")
+    output_func("  Основные: ls, cd, pwd, echo, cat, tail, whoami, exit")
     output_func("  Переменные окружения ($ЗНАЧЕНИЕ)")
-    output_func("  VFS: vfs-load, vfs-ls, vfs-cd, vfs-pwd, vfs-cat, vfs-status")
+    output_func("  VFS: vfs-load, vfs-ls, vfs-cd, vfs-pwd, vfs-cat, vfs-tail, vfs-whoami, vfs-status")
     output_func("  Скрипты: basic_commands, navigation, error_test")
     output_func("  VFS-скрипты: vfs_deepstruct_test, vfs_error_test, vfs_all_test")
     output_func("  Скрипт для проверки всей системы: system_test")
+    output_func("  Скрипт этапа 4: stage4_test")
     output_func("")
-
 
     # Создаем поле для ввода команды
     input_frame = tk.Frame(root, bg='black')
