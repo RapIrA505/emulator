@@ -1,0 +1,82 @@
+# === Stage 5 Test Script ===
+# Тестирование всех команд VFS и обработки ошибок
+
+echo "=== Начало тестирования Stage 4 ==="
+
+# Тестирование команды whoami
+echo "1. Тестирование whoami:"
+whoami
+vfs-whoami
+
+# Тестирование команды ls с различными аргументами
+echo "2. Тестирование ls:"
+ls
+ls -l
+ls -a
+ls /nonexistent
+
+# Тестирование VFS ls
+vfs-ls
+vfs-ls -l
+vfs-ls -a
+vfs-ls /nonexistent
+
+# Тестирование команды tail
+echo "3. Тестирование tail:"
+tail -n 3 stage4_test.txt
+tail stage4_test.txt
+tail -n 5 /nonexistent
+
+# Тестирование VFS tail
+vfs-tail -n 3 readme.txt
+vfs-tail large_file.txt
+vfs-tail -n 5 nonexistent.txt
+
+# Тестирование команды chown в VFS
+echo "4. Тестирование vfs-chown:"
+vfs-chown
+vfs-chown root
+vfs-chown root readme.txt
+vfs-chown admin:wheel readme.txt
+vfs-chown root /nonexistent/file.txt
+
+# Проверяем изменения с помощью ls -l
+vfs-ls -l
+
+# Тестирование команды vfs-load
+echo "5. Тестирование vfs-load:"
+vfs-load
+vfs-status
+vfs-load /nonexistent/path
+vfs-load /tmp
+
+# Навигация по VFS
+echo "6. Тестирование навигации в VFS:"
+vfs-cd documents
+vfs-ls
+vfs-cd work
+vfs-ls
+vfs-pwd
+vfs-cd ..
+vfs-cd ../..
+vfs-pwd
+
+# Тестирование обработки ошибок
+echo "7. Тестирование обработки ошибок:"
+vfs-cat nonexistent.txt
+vfs-cd invalid_directory
+vfs-tail
+vfs-chown user
+
+# Комплексный тест
+echo "8. Комплексный тест:"
+vfs-cd /
+vfs-ls -l
+vfs-cd projects/python
+vfs-ls
+vfs-cat main.py
+vfs-tail -n 2 main.py
+vfs-chown developer main.py
+vfs-ls -l
+
+echo "=== Тестирование Stage 4 завершено ==="

@@ -19,12 +19,14 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 
 # VFS структуры
 class VFSNode:
-    def __init__(self, name, is_directory=True, content=None):
+    def __init__(self, name, is_directory=True, content=None, owner=None, group=None):
         self.name = name
         self.is_directory = is_directory
         self.content = content if content else ({} if is_directory else '')
         self.children = {} if is_directory else None
         self.parent = None
+        self.owner = owner if owner else vfs_name  # По умолчанию - текущий пользователь
+        self.group = group if group else "users"   # По умолчанию - группа users
 
     def get_path(self):
         path_parts = []
@@ -43,16 +45,81 @@ class VFS:
         self.loaded_items_count = 0
 
     def load_from_directory(self, real_path):
-        """Безопасная загрузка VFS из директории"""
+        """Загрузка VFS - если путь None, создает образцовую структуру, иначе загружает из реальной директории"""
+        if real_path is None:
+            # Создаем образцовую структуру
+            print("Создаем образцовую структуру VFS...")
+            self._create_sample_structure()
+            self.loaded = True
+            return True
+        else:
+            # Загружаем из реальной директории
+            return self.load_from_real_directory(real_path)
+
+    def load_from_real_directory(self, real_path):
+        """Загружает VFS из реальной директории"""
         if not real_path or not os.path.exists(real_path):
             return False
 
-        print(f"Загружаем VFS из: {real_path}")
+        if not os.path.isdir(real_path):
+            return False
 
-        # Создаем простую тестовую структуру вместо загрузки реальных файлов
-        self._create_sample_structure()
-        self.loaded = True
-        return True
+        print(f"Загружаем VFS из реальной директории: {real_path}")
+
+        # Сбрасываем текущую VFS
+        self.root = VFSNode("", is_directory=True)
+        self.current_dir = self.root
+        self.loaded_items_count = 0
+
+        # Рекурсивно загружаем структуру
+        try:
+            self._load_directory_recursive(real_path, self.root)
+            self.loaded = True
+            return True
+        except Exception as e:
+            print(f"Ошибка загрузки VFS: {e}")
+            return False
+
+    def _load_directory_recursive(self, real_path, vfs_node):
+        """Рекурсивно загружает директорию в VFS"""
+        try:
+            for item_name in os.listdir(real_path):
+                # Пропускаем скрытые файлы, начинающиеся с .
+                if item_name.startswith('.'):
+                    continue
+
+                real_item_path = os.path.join(real_path, item_name)
+
+                if os.path.isdir(real_item_path):
+                    # Создаем директорию в VFS
+                    new_dir = VFSNode(item_name, is_directory=True)
+                    new_dir.parent = vfs_node
+                    vfs_node.children[item_name] = new_dir
+                    vfs_node.content[item_name] = new_dir
+                    self.loaded_items_count += 1
+
+                    # Рекурсивно загружаем содержимое
+                    self._load_directory_recursive(real_item_path, new_dir)
+                else:
+                    # Создаем файл в VFS
+                    try:
+                        # Читаем только текстовые файлы
+                        if item_name.endswith(('.txt', '.py', '.md', '.html', '.css', '.js', '.json')):
+                            with open(real_item_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                content = f.read()
+                        else:
+                            content = f"Бинарный файл: {item_name}"
+                    except:
+                        content = f"Содержимое файла {item_name}"
+
+                    new_file = VFSNode(item_name, is_directory=False, content=content)
+                    new_file.parent = vfs_node
+                    vfs_node.children[item_name] = new_file
+                    vfs_node.content[item_name] = content
+                    self.loaded_items_count += 1
+
+        except PermissionError:
+            print(f"Нет доступа к: {real_path}")
 
     def _create_sample_structure(self):
         """Создает образцовую структуру VFS"""
@@ -64,11 +131,12 @@ class VFS:
         folders_l1 = ["documents/", "pictures/", "music/", "projects/"]
         files_l1 = {
             "readme.txt": "Добро пожаловать в VFS!\nЭто виртуальная файловая система.\n" +
-                         "Эта строка 1\nЭта строка 2\nЭта строка 3\nЭта строка 4\nЭта строка 5\n" +
-                         "Эта строка 6\nЭта строка 7\nЭта строка 8\nЭта строка 9\nЭта строка 10\n" +
-                         "Эта строка 11\nЭта строка 12\nЭта строка 13\nЭта строка 14\nЭта строка 15",
+                          "Эта строка 1\nЭта строка 2\nЭта строка 3\nЭта строка 4\nЭта строка 5\n" +
+                          "Эта строка 6\nЭта строка 7\nЭта строка 8\nЭта строка 9\nЭта строка 10\n" +
+                          "Эта строка 11\nЭта строка 12\nЭта строка 13\nЭта строка 14\nЭта строка 15",
             "hello.py": "print('Hello from VFS!')\n# This is a comment\nimport os\n\nprint('Goodbye')",
             "large_file.txt": "\n".join([f"Строка {i}" for i in range(1, 21)]),
+            ".hidden_file": "Это скрытый файл",
         }
 
         # Уровень 2
@@ -149,6 +217,7 @@ class VFS:
         print(f"Создана VFS с {self.loaded_items_count} элементами и 3 уровнями вложенности")
 
     def change_directory(self, path):
+        """Изменяет текущую директорию в VFS"""
         if path == "/":
             self.current_dir = self.root
             return True
@@ -169,6 +238,7 @@ class VFS:
         return False
 
     def _resolve_absolute_path(self, path):
+        """Разрешает абсолютный путь в VFS"""
         path_parts = [p for p in path.split('/') if p]
         current = self.root
 
@@ -188,6 +258,7 @@ class VFS:
         return current
 
     def _resolve_relative_path(self, path):
+        """Разрешает относительный путь в VFS"""
         path_parts = [p for p in path.split('/') if p]
         current = self.current_dir
 
@@ -207,6 +278,7 @@ class VFS:
         return current
 
     def list_directory(self, path=None):
+        """Возвращает список содержимого директории"""
         target_dir = self.current_dir
         if path:
             if path.startswith("/"):
@@ -219,10 +291,42 @@ class VFS:
 
         return list(target_dir.children.keys())
 
+    def get_file_content(self, path):
+        """Возвращает содержимое файла по указанному пути"""
+        if path.startswith("/"):
+            target_node = self._resolve_absolute_path(path.lstrip("/"))
+        else:
+            target_node = self._resolve_relative_path(path)
+
+        if not target_node:
+            return None
+
+        if target_node.is_directory:
+            return None  # Это директория, а не файл
+
+        return target_node.content
 
     def get_current_path(self):
+        """Возвращает текущий путь в VFS"""
         return self.current_dir.get_path()
 
+    def find_node(self, path):
+        """Находит узел по указанному пути"""
+        if path.startswith("/"):
+            return self._resolve_absolute_path(path.lstrip("/"))
+        else:
+            return self._resolve_relative_path(path)
+
+    def change_owner(self, path, owner, group=None):
+        """Изменяет владельца файла/директории"""
+        node = self.find_node(path)
+        if not node:
+            return False
+
+        node.owner = owner
+        if group:
+            node.group = group
+        return True
 
 # Глобальный объект VFS
 vfs = VFS()
@@ -249,6 +353,45 @@ def do_parc(args, output_func):
     else:
         output_func(f"parc: ${var_name}: variable not found")
 
+
+def do_vfs_chown(args, output_func):
+    """Команда chown для VFS - изменение владельца файла/директории"""
+    if not vfs.loaded:
+        output_func("VFS не загружена. Используйте 'vfs-load' для загрузки.")
+        return
+
+    if len(args) < 2:
+        output_func("vfs-chown: missing operand")
+        output_func("Usage: vfs-chown OWNER FILE")
+        output_func("       vfs-chown OWNER:GROUP FILE")
+        return
+
+    target = args[-1]  # Последний аргумент - целевой файл/директория
+    owner_spec = args[0]
+
+    # Парсим спецификацию владельца (user или user:group)
+    if ':' in owner_spec:
+        owner, group = owner_spec.split(':', 1)
+    else:
+        owner = owner_spec
+        group = None
+
+    # Находим целевой узел
+    if target.startswith("/"):
+        target_node = vfs._resolve_absolute_path(target.lstrip("/"))
+    else:
+        target_node = vfs._resolve_relative_path(target)
+
+    if not target_node:
+        output_func(f"vfs-chown: cannot access '{target}': No such file or directory")
+        return
+
+    # Меняем владельца
+    target_node.owner = owner
+    if group:
+        target_node.group = group
+
+    output_func(f"Changed ownership of '{target}' to {owner_spec} in VFS")
 
 def do_ls(args, output_func):
     """Команда ls для реальной файловой системы с поддержкой параметров"""
@@ -485,14 +628,14 @@ def do_vfs_ls(args, output_func):
         if node.is_directory:
             if long_format:
                 # Для директории в длинном формате VFS
-                output_func(f"d--------- {item}/")
+                output_func(f"d--------- {node.owner} {node.group} {item}/")
             else:
                 output_func(item + "/")
         else:
             if long_format:
                 # Для файла в длинном формате VFS
                 content_length = len(node.content) if node.content else 0
-                output_func(f"---------- {content_length:>8} {item}")
+                output_func(f"---------- {node.owner} {node.group} {content_length:>8} {item}")
             else:
                 output_func(item)
 
@@ -615,17 +758,20 @@ def do_vfs_load(args, output_func):
     global vfs_path
 
     if not args:
-        # Используем домашнюю директорию по умолчанию
-        vfs_path = os.path.expanduser("~")
+        # Загружаем образцовую структуру по умолчанию
+        if vfs.load_from_directory(None):
+            output_func("VFS загружена (образцовая структура)")
+            output_func(f"Загружено элементов: {vfs.loaded_items_count}")
+        else:
+            output_func("Ошибка загрузки VFS")
     else:
+        # Загружаем из реальной директории
         vfs_path = args[0]
-
-    if vfs.load_from_directory(vfs_path):
-        output_func(f"VFS загружена из: {vfs_path}")
-        output_func(f"Загружено элементов: {vfs.loaded_items_count}")
-    else:
-        output_func(f"Ошибка загрузки VFS из: {vfs_path}")
-
+        if vfs.load_from_real_directory(vfs_path):
+            output_func(f"VFS загружена из: {vfs_path}")
+            output_func(f"Загружено элементов: {vfs.loaded_items_count}")
+        else:
+            output_func(f"Ошибка загрузки VFS из: {vfs_path}")
 
 def do_vfs_status(args, output_func):
     """Команда для показа статуса VFS"""
@@ -774,10 +920,12 @@ def execute_command(command, output_widget, show_command=True):
         do_vfs_load(args, output_func)
     elif cmd == 'vfs-status':
         do_vfs_status(args, output_func)
+    elif cmd == 'vfs-chown':
+        do_vfs_chown(args, output_func)
     # Запуск скриптов
     elif cmd in ['basic_commands', 'navigation', 'error_test',
                  'vfs_deepstruct_test', 'vfs_error_test',
-                 'vfs_all_test', 'system_test', 'stage4_test']:
+                 'vfs_all_test', 'system_test', 'stage4_test', "stage5_test"]:
         run_script(cmd, output_widget, output_func)
     else:
         output_func(f'{cmd}: command not found')
@@ -793,7 +941,7 @@ def main():
 
     # Автоматически загружаем VFS если указан путь
     if vfs_path:
-        vfs.load_from_directory(vfs_path)
+        vfs.load_from_real_directory(vfs_path)
 
     # Создаем главное окно
     root = tk.Tk()
@@ -831,6 +979,7 @@ def main():
     output_func("  VFS-скрипты: vfs_deepstruct_test, vfs_error_test, vfs_all_test")
     output_func("  Скрипт для проверки всей системы: system_test")
     output_func("  Скрипт этапа 4: stage4_test")
+    output_func("  Скрипт этапа 5: stage5_test")
     output_func("")
 
     # Создаем поле для ввода команды
