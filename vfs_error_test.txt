@@ -1,0 +1,13 @@
+# Тестирование обработки ошибок в VFS
+echo "=== Тестирование обработки ошибок в VFS ==="
+vfs-load
+echo "--- Попытка доступа к несуществующим путям ---"
+vfs-cd nonexistent_folder
+vfs-ls /invalid/path
+echo "--- Попытка чтения несуществующих файлов ---"
+vfs-cat no_such_file.txt
+echo "--- Попытка применения cat к директории ---"
+vfs-cd documents
+vfs-cat work
+vfs-cd /
+echo "--- Тестирование завершено успешно ==="

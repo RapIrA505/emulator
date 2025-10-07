@@ -1,0 +1,22 @@
+# Комплексное тестирование VFS
+echo "=== Комплексное тестирование VFS ==="
+vfs-load
+vfs-status
+echo "--- Проверка структуры ---"
+vfs-ls
+vfs-cd documents
+vfs-ls
+vfs-cd work
+vfs-ls
+vfs-cd ../../
+vfs-cd projects/python
+vfs-ls
+vfs-cat main.py
+vfs-cd /
+echo "--- Проверка переменных окружения ---"
+$HOME
+$USER
+echo "--- Возврат к реальной ФС ---"
+pwd
+ls
+echo "=== Все тесты пройдены успешно ==="

@@ -1,0 +1,25 @@
+# Тестирование VFS с глубокой структурой (3+ уровня)
+echo "=== Тестирование VFS с глубокой структурой ==="
+vfs-load
+vfs-status
+echo "--- Исследование структуры ---"
+vfs-ls
+vfs-cd documents
+vfs-ls
+vfs-cd work
+vfs-ls
+vfs-cd ../personal
+vfs-ls
+vfs-cat diary.txt
+vfs-cd ../../
+vfs-cd projects
+vfs-ls
+vfs-cd python
+vfs-ls
+vfs-cat main.py
+vfs-cd ../web
+vfs-ls
+vfs-cat index.html
+vfs-cd /
+vfs-pwd
+echo "=== Тестирование завершено ==="

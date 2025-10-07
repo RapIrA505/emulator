@@ -1,9 +1,10 @@
 import shlex
 import os
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, messagebox
 import argparse
 import sys
+import subprocess
 
 vfs_name = os.getlogin()
 exit_cmd = "exit"
@@ -41,13 +42,12 @@ class VFS:
 
     def load_from_directory(self, real_path):
         """Безопасная загрузка VFS из директории"""
-        if not os.path.exists(real_path):
+        if not real_path or not os.path.exists(real_path):
             return False
 
         print(f"Загружаем VFS из: {real_path}")
 
         # Создаем простую тестовую структуру вместо загрузки реальных файлов
-        # чтобы избежать проблем с доступом
         self._create_sample_structure()
         self.loaded = True
         return True
@@ -57,30 +57,90 @@ class VFS:
         self.root = VFSNode("", is_directory=True)
         self.current_dir = self.root
 
-        # Создаем тестовую структуру
-        folders = ["documents/", "pictures/", "music/"]
-        files = {
+        # Создаем тестовую структуру с 3 уровнями вложенности
+        # Уровень 1
+        folders_l1 = ["documents/", "pictures/", "music/", "projects/"]
+        files_l1 = {
             "readme.txt": "Добро пожаловать в VFS!\nЭто виртуальная файловая система.",
             "hello.py": "print('Hello from VFS!')",
-            "notes.md": "# Мои заметки в VFS\n\n- Заметка 1\n- Заметка 2"
         }
 
-        # Создаем папки
-        for folder in folders:
-            new_dir = VFSNode(folder[:-1], is_directory=True)
-            new_dir.parent = self.root
-            self.root.children[folder[:-1]] = new_dir
-            self.root.content[folder[:-1]] = new_dir
+        # Уровень 2
+        folders_l2 = {
+            "documents": ["work/", "personal/"],
+            "pictures": ["vacations/", "screenshots/"],
+            "projects": ["python/", "web/"]
+        }
+        files_l2 = {
+            "documents": ["report.pdf", "notes.txt"],
+            "projects": ["todo.md", "ideas.txt"]
+        }
 
-        # Создаем файлы
-        for filename, content in files.items():
+        # Уровень 3
+        files_l3 = {
+            "documents/work": ["presentation.pptx", "budget.xlsx"],
+            "documents/personal": ["diary.txt", "recipes.md"],
+            "projects/python": ["main.py", "utils.py"],
+            "projects/web": ["index.html", "style.css"]
+        }
+
+        # Создаем структуру уровня 1
+        for folder in folders_l1:
+            folder_name = folder[:-1]
+            new_dir = VFSNode(folder_name, is_directory=True)
+            new_dir.parent = self.root
+            self.root.children[folder_name] = new_dir
+            self.root.content[folder_name] = new_dir
+
+        for filename, content in files_l1.items():
             new_file = VFSNode(filename, is_directory=False, content=content)
             new_file.parent = self.root
             self.root.children[filename] = new_file
             self.root.content[filename] = content
 
-        self.loaded_items_count = len(folders) + len(files)
-        print(f"Создана образцовая VFS с {self.loaded_items_count} элементами")
+        # Создаем структуру уровня 2
+        for parent_folder, subfolders in folders_l2.items():
+            if parent_folder in self.root.children:
+                parent_node = self.root.children[parent_folder]
+                for folder in subfolders:
+                    folder_name = folder[:-1]
+                    new_dir = VFSNode(folder_name, is_directory=True)
+                    new_dir.parent = parent_node
+                    parent_node.children[folder_name] = new_dir
+                    parent_node.content[folder_name] = new_dir
+
+        for parent_folder, file_list in files_l2.items():
+            if parent_folder in self.root.children:
+                parent_node = self.root.children[parent_folder]
+                for filename in file_list:
+                    content = f"Содержимое файла {filename} в папке {parent_folder}"
+                    new_file = VFSNode(filename, is_directory=False, content=content)
+                    new_file.parent = parent_node
+                    parent_node.children[filename] = new_file
+                    parent_node.content[filename] = content
+
+        # Создаем структуру уровня 3
+        for folder_path, file_list in files_l3.items():
+            path_parts = folder_path.split('/')
+            current_node = self.root
+
+            # Находим узел для пути
+            for part in path_parts:
+                if part in current_node.children:
+                    current_node = current_node.children[part]
+
+            for filename in file_list:
+                content = f"Содержимое файла {filename} в папке {folder_path}"
+                new_file = VFSNode(filename, is_directory=False, content=content)
+                new_file.parent = current_node
+                current_node.children[filename] = new_file
+                current_node.content[filename] = content
+
+        self.loaded_items_count = (len(folders_l1) + len(files_l1) +
+                                   sum(len(subs) for subs in folders_l2.values()) +
+                                   sum(len(files) for files in files_l2.values()) +
+                                   sum(len(files) for files in files_l3.values()))
+        print(f"Создана VFS с {self.loaded_items_count} элементами и 3 уровнями вложенности")
 
     def change_directory(self, path):
         if path == "/":
@@ -350,7 +410,7 @@ def do_vfs_status(args, output_func):
         output_func("VFS не загружена. Используйте 'vfs-load' для загрузки.")
 
 
-# === СИСТЕМНЫЕ ФУНКЦИИ ===
+# === СКРИПТЫ ===
 
 def get_script_path(script_name):
     """Возвращает абсолютный путь к скрипту"""
@@ -413,7 +473,10 @@ def run_script(script_name, output_widget, output_func):
             output_widget.update()
 
             # Выполняем команду
-            execute_command(line, output_widget, show_command=False)
+            result = execute_command(line, output_widget, show_command=False)
+            if result == "exit":
+                output_func("Скрипт прерван командой exit")
+                return True
 
         output_func(f"=== Скрипт {os.path.basename(script_path)} завершен ===")
         return True
@@ -477,7 +540,9 @@ def execute_command(command, output_widget, show_command=True):
     elif cmd == 'vfs-status':
         do_vfs_status(args, output_func)
     # Запуск скриптов
-    elif cmd in ['basic_commands', 'navigation', 'error_test', 'startup']:
+    elif cmd in ['basic_commands', 'navigation', 'error_test',
+                 'vfs_deepstruct_test', 'vfs_error_test',
+                 'vfs_all_test', 'system_test']:
         run_script(cmd, output_widget, output_func)
     else:
         output_func(f'{cmd}: command not found')
@@ -525,18 +590,13 @@ def main():
     output_func("=== Эмулятор терминала ===")
     output_func("Доступные команды:")
     output_func("  Основные: ls, cd, pwd, echo, cat, exit")
-    output_func("  Переменные: $HOME, $USER, $APPDATA, etc.")
+    output_func("  Переменные окружения ($ЗНАЧЕНИЕ)")
     output_func("  VFS: vfs-load, vfs-ls, vfs-cd, vfs-pwd, vfs-cat, vfs-status")
     output_func("  Скрипты: basic_commands, navigation, error_test")
+    output_func("  VFS-скрипты: vfs_deepstruct_test, vfs_error_test, vfs_all_test")
+    output_func("  Скрипт для проверки всей системы: system_test")
     output_func("")
 
-    # Если указан стартовый скрипт, выполняем его
-    if startup_script:
-        script_path = get_script_path(startup_script)
-        if script_path and os.path.exists(script_path):
-            run_script(startup_script, output_text, output_func)
-        else:
-            output_func(f"Стартовый скрипт '{startup_script}' не найден")
 
     # Создаем поле для ввода команды
     input_frame = tk.Frame(root, bg='black')
