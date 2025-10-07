@@ -1,0 +1,6 @@
+# Скрипт для тестирования обработки ошибок
+echo "Тестирование ошибок..."
+ls nonexistent_directory
+cd invalid_path
+unknown_command
+echo "Тестирование завершено"
