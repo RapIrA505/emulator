@@ -1,10 +1,8 @@
 import shlex
 import os
 import tkinter as tk
-from tkinter import scrolledtext, messagebox
+from tkinter import scrolledtext
 import argparse
-import sys
-import subprocess
 import stat
 import datetime
 
@@ -331,7 +329,6 @@ class VFS:
 # Глобальный объект VFS
 vfs = VFS()
 
-
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Terminal Emulator')
     parser.add_argument('--vfs-path', help='Путь к физическому расположению VFS')
@@ -479,6 +476,17 @@ def get_permissions_string(stat_info):
 
     return permissions
 
+def do_help(args, output_func):
+    output_func("Доступные команды:")
+    output_func("  Основные: ls, cd, pwd, echo, cat, tail, whoami, exit")
+    output_func("  Переменные окружения ($ЗНАЧЕНИЕ)")
+    output_func("  VFS: vfs-load, vfs-ls, vfs-cd, vfs-pwd, vfs-cat, vfs-tail, vfs-whoami, vfs-status")
+    output_func("  Скрипты: basic_commands, navigation, error_test")
+    output_func("  VFS-скрипты: vfs_deepstruct_test, vfs_error_test, vfs_all_test")
+    output_func("  Скрипт для проверки всей системы: system_test")
+    output_func("  Скрипт этапа 4: stage4_test")
+    output_func("  Скрипт этапа 5: stage5_test")
+    output_func("")
 
 def do_cd(args, output_func):
     """Команда cd для реальной файловой системы"""
@@ -922,6 +930,8 @@ def execute_command(command, output_widget, show_command=True):
         do_vfs_status(args, output_func)
     elif cmd == 'vfs-chown':
         do_vfs_chown(args, output_func)
+    elif cmd == 'help':
+        do_help(args, output_func)
     # Запуск скриптов
     elif cmd in ['basic_commands', 'navigation', 'error_test',
                  'vfs_deepstruct_test', 'vfs_error_test',
@@ -968,19 +978,6 @@ def main():
         output_text.insert(tk.END, f"{text}\n")
         output_text.config(state=tk.DISABLED)
         output_text.see(tk.END)
-
-    # Приветственное сообщение
-    output_func("=== Эмулятор терминала ===")
-    output_func("Доступные команды:")
-    output_func("  Основные: ls, cd, pwd, echo, cat, tail, whoami, exit")
-    output_func("  Переменные окружения ($ЗНАЧЕНИЕ)")
-    output_func("  VFS: vfs-load, vfs-ls, vfs-cd, vfs-pwd, vfs-cat, vfs-tail, vfs-whoami, vfs-status")
-    output_func("  Скрипты: basic_commands, navigation, error_test")
-    output_func("  VFS-скрипты: vfs_deepstruct_test, vfs_error_test, vfs_all_test")
-    output_func("  Скрипт для проверки всей системы: system_test")
-    output_func("  Скрипт этапа 4: stage4_test")
-    output_func("  Скрипт этапа 5: stage5_test")
-    output_func("")
 
     # Создаем поле для ввода команды
     input_frame = tk.Frame(root, bg='black')
